@@ -1,0 +1,59 @@
+name: "YouTube Specialist PRO"
+on:
+  workflow_dispatch:
+    inputs:
+      yt_url:
+        description: 'קישור ליוטיוב'
+        required: true
+      format:
+        description: 'mp4 או mp3'
+        default: 'mp4'
+        required: true
+
+jobs:
+  youtube_job:
+    runs-on: ubuntu-latest
+    container:
+      image: jauderho/yt-dlp:latest
+    permissions: write-all
+    steps:
+      - name: 1. Download and Zip
+        id: download_step
+        run: |
+          URL="${{ github.event.inputs.yt_url }}"
+          FORMAT="${{ github.event.inputs.format }}"
+          mkdir -p yt_output
+          mkdir -p final_zip
+          
+          echo "${{ secrets.YT_COOKIES }}" > cookies.txt
+          
+          # חילוץ שם הסרטון המקורי לשימוש בתוך ה-ZIP
+          VIDEO_TITLE=$(yt-dlp --cookies cookies.txt --get-filename -o "%(title)s" "$URL")
+          
+          # הורדת הקובץ
+          if [ "$FORMAT" = "mp3" ]; then
+            yt-dlp --cookies cookies.txt -x --audio-format mp3 -o "yt_output/%(title)s.%(ext)s" "$URL"
+          else
+            yt-dlp --cookies cookies.txt -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "yt_output/%(title)s.%(ext)s" "$URL"
+          fi
+          
+          # יצירת ZIP עם השם המקורי של הסרטון
+          apk add zip
+          cd yt_output
+          zip -r "../final_zip/${VIDEO_TITLE}.zip" .
+          cd ..
+          
+          rm cookies.txt
+
+      - name: 2. Create Numbered Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "final_zip/*.zip"
+          # התג חייב להיות ייחודי, לכן נשתמש במספר ההרצה
+          tag: "run-${{ github.run_number }}"
+          # שם ה-Release יהיה רק המספר הסידורי כפי שביקשת
+          name: "הורדה מספר ${{ github.run_number }}"
+          # הוספת הקישור ליוטיוב בתיאור כדי שעדיין תדע מה ירד שם
+          body: |
+            **קישור מקור:** ${{ github.event.inputs.yt_url }}
+          token: ${{ secrets.GITHUB_TOKEN }}
