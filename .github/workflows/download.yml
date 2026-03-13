@@ -1,4 +1,4 @@
-name: "YouTube Specialist PRO"
+name: "Downloads songs from YouTube with filtering"
 on:
   workflow_dispatch:
     inputs:
