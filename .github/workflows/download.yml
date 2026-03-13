@@ -17,7 +17,7 @@ jobs:
       image: jauderho/yt-dlp:latest
     permissions: write-all
     steps:
-      - name: 1. Download and Zip
+      - name: 1. Download Video, Thumbnail and Metadata
         id: download_step
         run: |
           URL="${{ github.event.inputs.yt_url }}"
@@ -27,20 +27,21 @@ jobs:
           
           echo "${{ secrets.YT_COOKIES }}" > cookies.txt
           
-          # חילוץ שם הסרטון המקורי לשימוש בתוך ה-ZIP
+          # חילוץ שם הסרטון
           VIDEO_TITLE=$(yt-dlp --cookies cookies.txt --get-filename -o "%(title)s" "$URL")
           
-          # הורדת הקובץ
+          # פקודת בסיס להורדת תמונה ומטא-דאטה
+          COMMON_OPTS="--cookies cookies.txt --write-thumbnail --write-info-json --add-metadata"
+          
           if [ "$FORMAT" = "mp3" ]; then
-            yt-dlp --cookies cookies.txt -x --audio-format mp3 -o "yt_output/%(title)s.%(ext)s" "$URL"
+            yt-dlp $COMMON_OPTS -x --audio-format mp3 -o "yt_output/%(title)s.%(ext)s" "$URL"
           else
-            yt-dlp --cookies cookies.txt -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "yt_output/%(title)s.%(ext)s" "$URL"
+            yt-dlp $COMMON_OPTS -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "yt_output/%(title)s.%(ext)s" "$URL"
           fi
           
-          # יצירת ZIP עם השם המקורי של הסרטון
           apk add zip
           cd yt_output
-          zip -r "../final_zip/${VIDEO_TITLE}.zip" .
+          zip -r "../final_zip/${VIDEO_TITLE}_with_metadata.zip" .
           cd ..
           
           rm cookies.txt
@@ -49,11 +50,9 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           artifacts: "final_zip/*.zip"
-          # התג חייב להיות ייחודי, לכן נשתמש במספר ההרצה
           tag: "run-${{ github.run_number }}"
-          # שם ה-Release יהיה רק המספר הסידורי כפי שביקשת
-          name: "הורדה מספר ${{ github.run_number }}"
-          # הוספת הקישור ליוטיוב בתיאור כדי שעדיין תדע מה ירד שם
+          name: "הורדה מלאה מספר ${{ github.run_number }}"
           body: |
-            **קישור מקור:** ${{ github.event.inputs.yt_url }}
+            **הורדה הכוללת תמונה ומטא-דאטה**
+            **קישור:** ${{ github.event.inputs.yt_url }}
           token: ${{ secrets.GITHUB_TOKEN }}
