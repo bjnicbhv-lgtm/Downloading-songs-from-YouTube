@@ -2,18 +2,19 @@ import streamlit as st
 import yt_dlp
 import os
 
-st.set_page_config(page_title="Music Downloader", page_icon="🎵")
+st.set_page_config(page_title="Music & Video Downloader", page_icon="🎵")
 
-st.title("YouTube Music Downloader")
-st.write("הדבק קישור למטה ולחץ על כפתור ההורדה.")
+st.title("YouTube Downloader")
+st.write("הדבק קישור, בחר פורמט והורד בקלות.")
 
 url = st.text_input("הכנס קישור כאן:", placeholder="https://www.youtube.com/watch?v=...")
+# הוספת הבחירה מחדש
+format_choice = st.radio("בחר פורמט הורדה:", ["MP3 (רק אודיו)", "MP4 (וידאו)"], horizontal=True)
 
 if url:
-    if st.button("הורד עכשיו"):
-        with st.spinner("מעבד את השיר..."):
+    if st.button("התחל הורדה"):
+        with st.spinner("מעבד... נא להמתין."):
             try:
-                # טעינת עוגיות מה-Secrets
                 if "YT_COOKIES" not in st.secrets:
                     st.error("חסר YT_COOKIES ב-Secrets!")
                     st.stop()
@@ -21,32 +22,46 @@ if url:
                 with open("cookies.txt", "w") as f:
                     f.write(st.secrets["YT_COOKIES"])
 
-                # הגדרות הורדה הכי בטוחות שיש (מונע את שגיאת הפורמט)
-                ydl_opts = {
-                    'format': 'bestaudio/best', # לוקח את האודיו הכי טוב שזמין בלי להסתבך
-                    'cookiefile': 'cookies.txt',
-                    'outtmpl': 'song_file.%(ext)s',
-                    'noplaylist': True,
-                    'quiet': True
-                }
+                # הגדרות הורדה גמישות למניעת השגיאה
+                if "MP3" in format_choice:
+                    ydl_opts = {
+                        'format': 'bestaudio/best',
+                        'postprocessors': [{
+                            'key': 'FFmpegExtractAudio',
+                            'preferredcodec': 'mp3',
+                            'preferredquality': '192',
+                        }],
+                        'cookiefile': 'cookies.txt',
+                        'outtmpl': 'downloaded_file.%(ext)s',
+                    }
+                else:
+                    # הגדרות ל-MP4
+                    ydl_opts = {
+                        'format': 'best[ext=mp4]/best', # מבטיח הורדת MP4 שכולל גם סאונד וגם וידאו
+                        'cookiefile': 'cookies.txt',
+                        'outtmpl': 'downloaded_file.%(ext)s',
+                    }
 
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=True)
-                    actual_filename = ydl.prepare_filename(info)
+                    filename = ydl.prepare_filename(info)
+                    
+                    # תיקון סיומת ל-MP3 אם עבר עיבוד
+                    if "MP3" in format_choice and not filename.endswith(".mp3"):
+                        filename = filename.rsplit('.', 1)[0] + ".mp3"
 
-                # כפתור הורדה למשתמש
-                with open(actual_filename, "rb") as file:
-                    st.success(f"✅ השיר '{info['title']}' מוכן!")
+                with open(filename, "rb") as file:
+                    st.success(f"✅ '{info.get('title')}' מוכן!")
                     st.download_button(
-                        label="📥 לחץ כאן לשמירת השיר",
+                        label="📥 לחץ כאן להורדה",
                         data=file,
-                        file_name=f"{info['title']}.{actual_filename.split('.')[-1]}",
-                        mime="audio/mpeg"
+                        file_name=f"{info.get('title')}.{'mp3' if 'MP3' in format_choice else 'mp4'}",
+                        mime="audio/mpeg" if "MP3" in format_choice else "video/mp4"
                     )
                 
-                # ניקוי
-                os.remove(actual_filename)
+                os.remove(filename)
                 if os.path.exists("cookies.txt"): os.remove("cookies.txt")
 
             except Exception as e:
-                st.error(f"חלה שגיאה: {e}")
+                st.error(f"שגיאה: {str(e)}")
+                if os.path.exists("cookies.txt"): os.remove("cookies.txt")
