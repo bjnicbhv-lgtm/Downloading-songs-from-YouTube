@@ -31,28 +31,32 @@ jobs:
           done
           rm cookies.txt
 
-      - name: 2. Process Output (Smart ZIP)
+      - name: 2. Process Output (Smart Upload)
         id: process
         run: |
           COUNT=$(ls -1 yt_output | wc -l)
           if [ "$COUNT" -gt 1 ]; then
             apk add zip
             zip -r "final_output.zip" yt_output/
-            echo "mode=zip" >> $GITHUB_OUTPUT
+            echo "path=final_output.zip" >> $GITHUB_OUTPUT
+            echo "type=חבילת קבצים" >> $GITHUB_OUTPUT
           else
-            mv yt_output/* ./
-            echo "mode=single" >> $GITHUB_OUTPUT
+            # מעביר את הקובץ הבודד לתיקייה הראשית כדי שה-Release יוכל למצוא אותו בקלות
+            FILE_NAME=$(ls yt_output)
+            mv "yt_output/$FILE_NAME" .
+            echo "path=$FILE_NAME" >> $GITHUB_OUTPUT
+            echo "type=קובץ בודד" >> $GITHUB_OUTPUT
           fi
 
       - name: 3. Create Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: ${{ steps.process.outputs.mode == 'zip' && 'final_output.zip' || '* .mp3' && '* .mp4' }}
+          artifacts: "${{ steps.process.outputs.path }}"
           tag: "run-${{ github.run_number }}"
           name: "הורדה מספר ${{ github.run_number }}"
           body: |
-            בוצע באמצעות: Downloading songs from YouTube with filtering
-            סוג הורדה: ${{ steps.process.outputs.mode == 'zip' && 'חבילת קבצים' || 'קובץ בודד' }}
+            **שם התוכנה:** Downloading songs from YouTube with filtering
+            **סוג הורדה:** ${{ steps.process.outputs.type }}
           token: ${{ secrets.GITHUB_TOKEN }}
           allowUpdates: true
-          omitArtifactsAdditionalCheck: true
+          removeArtifacts: true
