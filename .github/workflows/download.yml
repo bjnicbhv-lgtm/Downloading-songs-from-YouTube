@@ -17,42 +17,48 @@ jobs:
       image: jauderho/yt-dlp:latest
     permissions: write-all
     steps:
-      - name: 1. Download Content
+      - name: 1. Download Multiple Videos
         run: |
-          mkdir -p final_files
+          mkdir -p yt_output
           echo "${{ secrets.YT_COOKIES }}" > cookies.txt
           
+          # מעבר על כל הקישורים שהוכנסו
           for url in ${{ github.event.inputs.yt_urls }}; do
+            echo "מוריד: $url"
+            
             if [ "${{ github.event.inputs.format }}" = "mp3" ]; then
-              yt-dlp --cookies cookies.txt -x --audio-format mp3 --embed-thumbnail --add-metadata -o "%(title)s.%(ext)s" --paths "final_files" "$url"
+              yt-dlp --cookies cookies.txt \
+                -x --audio-format mp3 \
+                --embed-thumbnail \
+                --add-metadata \
+                -o "%(title)s.%(ext)s" \
+                --paths "yt_output" \
+                "$url"
             else
-              yt-dlp --cookies cookies.txt -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 --embed-thumbnail --add-metadata -o "%(title)s.%(ext)s" --paths "final_files" "$url"
+              yt-dlp --cookies cookies.txt \
+                -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" \
+                --merge-output-format mp4 \
+                --embed-thumbnail \
+                --add-metadata \
+                -o "%(title)s.%(ext)s" \
+                --paths "yt_output" \
+                "$url"
             fi
           done
+          
           rm cookies.txt
 
-      - name: 2. Prepare Artifact
-        id: prep
+      - name: 2. Zip and Upload
         run: |
-          COUNT=$(ls -1 final_files | wc -l)
-          if [ "$COUNT" -gt 1 ]; then
-            apk add zip
-            zip -j "download_package.zip" final_files/*
-            echo "path=download_package.zip" >> $GITHUB_OUTPUT
-          else
-            # מוצא את שם הקובץ היחיד ומעביר אותו לתיקייה הראשית
-            FILE_NAME=$(ls final_files)
-            mv "final_files/$FILE_NAME" .
-            echo "path=$FILE_NAME" >> $GITHUB_OUTPUT
-          fi
+          apk add zip
+          zip -r "downloads.zip" yt_output/
 
       - name: 3. Create Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "${{ steps.prep.outputs.path }}"
+          artifacts: "downloads.zip"
           tag: "run-${{ github.run_number }}"
           name: "הורדה מספר ${{ github.run_number }}"
           body: |
             בוצע באמצעות: Downloading songs from YouTube with filtering
           token: ${{ secrets.GITHUB_TOKEN }}
-          allowUpdates: true
