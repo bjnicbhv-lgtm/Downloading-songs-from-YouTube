@@ -2,8 +2,8 @@ name: "Downloading songs from YouTube with filtering"
 on:
   workflow_dispatch:
     inputs:
-      yt_url:
-        description: 'קישור ליוטיוב'
+      yt_urls:
+        description: 'הדבק קישור אחד או כמה (מופרדים ברווח)'
         required: true
       format:
         description: 'mp3 או mp4'
@@ -17,44 +17,48 @@ jobs:
       image: jauderho/yt-dlp:latest
     permissions: write-all
     steps:
-      - name: 1. Download and Embed Metadata
-        id: download_step
+      - name: 1. Download Multiple Videos
         run: |
-          URL="${{ github.event.inputs.yt_url }}"
-          FORMAT="${{ github.event.inputs.format }}"
           mkdir -p yt_output
-          
           echo "${{ secrets.YT_COOKIES }}" > cookies.txt
           
-          # הורדה עם שם קובץ תואם ליוטיוב והטמעת מידע
-          if [ "$FORMAT" = "mp3" ]; then
-            yt-dlp --cookies cookies.txt \
-              -x --audio-format mp3 \
-              --embed-thumbnail \
-              --add-metadata \
-              -o "%(title)s.%(ext)s" \
-              --paths "yt_output" \
-              "$URL"
-          else
-            yt-dlp --cookies cookies.txt \
-              -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" \
-              --merge-output-format mp4 \
-              --embed-thumbnail \
-              --add-metadata \
-              -o "%(title)s.%(ext)s" \
-              --paths "yt_output" \
-              "$URL"
-          fi
+          # מעבר על כל הקישורים שהוכנסו
+          for url in ${{ github.event.inputs.yt_urls }}; do
+            echo "מוריד: $url"
+            
+            if [ "${{ github.event.inputs.format }}" = "mp3" ]; then
+              yt-dlp --cookies cookies.txt \
+                -x --audio-format mp3 \
+                --embed-thumbnail \
+                --add-metadata \
+                -o "%(title)s.%(ext)s" \
+                --paths "yt_output" \
+                "$url"
+            else
+              yt-dlp --cookies cookies.txt \
+                -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" \
+                --merge-output-format mp4 \
+                --embed-thumbnail \
+                --add-metadata \
+                -o "%(title)s.%(ext)s" \
+                --paths "yt_output" \
+                "$url"
+            fi
+          done
           
           rm cookies.txt
 
-      - name: 2. Create Numbered Release
+      - name: 2. Zip and Upload
+        run: |
+          apk add zip
+          zip -r "downloads.zip" yt_output/
+
+      - name: 3. Create Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "yt_output/*"
+          artifacts: "downloads.zip"
           tag: "run-${{ github.run_number }}"
           name: "הורדה מספר ${{ github.run_number }}"
           body: |
-            **הקובץ כולל תמונה ומטא-דאטה מוטמעים**
-            שם השיר חולץ אוטומטית מיוטיוב.
+            בוצע באמצעות: Downloading songs from YouTube with filtering
           token: ${{ secrets.GITHUB_TOKEN }}
