@@ -2,7 +2,7 @@ import streamlit as st
 import yt_dlp
 import os
 
-st.set_page_config(page_title="YouTube Downloader", page_icon="📥")
+st.set_page_config(page_title="YouTube Downloader", page_icon="file:///C:/Users/%D7%99%D7%9C%D7%93%D7%99%D7%9D/Downloads/00551.png")
 st.title("YouTube Downloader")
 
 url = st.text_input("הדבק כאן את הקישור מיוטיוב:", placeholder="https://www.youtube.com/watch?v=...")
