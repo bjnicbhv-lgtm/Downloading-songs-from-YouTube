@@ -1,4 +1,4 @@
-name: "Downloads songs from YouTube with filtering"
+name: "YouTube Specialist PRO"
 on:
   workflow_dispatch:
     inputs:
@@ -6,8 +6,8 @@ on:
         description: 'קישור ליוטיוב'
         required: true
       format:
-        description: 'mp4 או mp3'
-        default: 'mp4'
+        description: 'mp3 או mp4'
+        default: 'mp3'
         required: true
 
 jobs:
@@ -17,42 +17,41 @@ jobs:
       image: jauderho/yt-dlp:latest
     permissions: write-all
     steps:
-      - name: 1. Download Video, Thumbnail and Metadata
+      - name: 1. Download and Embed Metadata
         id: download_step
         run: |
           URL="${{ github.event.inputs.yt_url }}"
           FORMAT="${{ github.event.inputs.format }}"
           mkdir -p yt_output
-          mkdir -p final_zip
           
           echo "${{ secrets.YT_COOKIES }}" > cookies.txt
           
-          # חילוץ שם הסרטון
-          VIDEO_TITLE=$(yt-dlp --cookies cookies.txt --get-filename -o "%(title)s" "$URL")
-          
-          # פקודת בסיס להורדת תמונה ומטא-דאטה
-          COMMON_OPTS="--cookies cookies.txt --write-thumbnail --write-info-json --add-metadata"
-          
+          # הגדרות להטמעת תמונה ומטא-דאטה ישירות לתוך הקובץ
           if [ "$FORMAT" = "mp3" ]; then
-            yt-dlp $COMMON_OPTS -x --audio-format mp3 -o "yt_output/%(title)s.%(ext)s" "$URL"
+            yt-dlp --cookies cookies.txt \
+              -x --audio-format mp3 \
+              --embed-thumbnail \
+              --add-metadata \
+              --metadata-from-title "%(artist)s - %(title)s" \
+              -o "yt_output/%(title)s.%(ext)s" "$URL"
           else
-            yt-dlp $COMMON_OPTS -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "yt_output/%(title)s.%(ext)s" "$URL"
+            yt-dlp --cookies cookies.txt \
+              -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" \
+              --merge-output-format mp4 \
+              --embed-thumbnail \
+              --add-metadata \
+              -o "yt_output/%(title)s.%(ext)s" "$URL"
           fi
-          
-          apk add zip
-          cd yt_output
-          zip -r "../final_zip/${VIDEO_TITLE}_with_metadata.zip" .
-          cd ..
           
           rm cookies.txt
 
       - name: 2. Create Numbered Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "final_zip/*.zip"
+          artifacts: "yt_output/*"
           tag: "run-${{ github.run_number }}"
-          name: "הורדה מלאה מספר ${{ github.run_number }}"
+          name: "הורדה מספר ${{ github.run_number }}"
           body: |
-            **הורדה הכוללת תמונה ומטא-דאטה**
-            **קישור:** ${{ github.event.inputs.yt_url }}
+            **הקובץ כולל תמונה ומטא-דאטה מוטמעים**
+            קישור: ${{ github.event.inputs.yt_url }}
           token: ${{ secrets.GITHUB_TOKEN }}
