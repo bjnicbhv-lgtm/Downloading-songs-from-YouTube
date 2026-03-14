@@ -1,44 +1,62 @@
 import streamlit as st
-import requests
-import time
+import yt_dlp
+import os
 
-st.title("Downloading songs from YouTube")
-st.write("הכנס קישור וההורדה תתחיל בשרת")
+# הגדרת כותרת האתר
+st.set_page_config(page_title="Music Downloader", page_icon="🎵")
 
-# תיבת קלט לקישור
-url = st.text_input("הדבק כאן את הקישור מיוטיוב:")
-format_choice = st.selectbox("בחר פורמט:", ["mp3", "mp4"])
+st.title("Downloading songs from YouTube with filtering")
+st.write("הדבק קישור מיוטיוב, המתן לעיבוד והורד את השיר ישירות למכשיר שלך.")
 
-if st.button("הורד שיר"):
-    if url:
-        # פקודה לגיטהאב להפעיל את ה-Action
-        # כאן צריך להגדיר את פרטי המאגר שלך
-        owner = "YOUR_GITHUB_USERNAME"
-        repo = "YOUR_REPO_NAME"
-        workflow_id = "download.yml"
-        token = st.secrets["GH_TOKEN"] # מפתח אבטחה
-        
-        headers = {
-            "Authorization": f"token {token}",
-            "Accept": "application/vnd.github.v3+json",
-        }
-        
-        data = {
-            "ref": "main",
-            "inputs": {
-                "yt_urls": url,
-                "format": format_choice
-            }
-        }
-        
-        response = requests.post(
-            f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches",
-            headers=headers,
-            json=data
-        )
-        
-        if response.status_code == 204:
-            st.success("הבקשה נשלחה! השיר יופיע ב-Releases בתוך דקה.")
-            st.info("שלח לחברים קישור לדף ה-Releases שלך כדי שיורידו משם.")
-        else:
-            st.error("הייתה שגיאה בחיבור לגיטהאב.")
+# תיבת קלט
+url = st.text_input("הכנס קישור כאן:")
+format_choice = st.radio("בחר פורמט:", ["MP3", "MP4"], horizontal=True)
+
+if url:
+    if st.button("התחל עיבוד"):
+        with st.spinner("מוריד ומעבד... זה לוקח כדקה."):
+            try:
+                # טעינת עוגיות מה-Secrets של Streamlit
+                cookies_content = st.secrets["YT_COOKIES"]
+                with open("cookies.txt", "w") as f:
+                    f.write(cookies_content)
+
+                # הגדרות ההורדה
+                ydl_opts = {
+                    'format': 'bestaudio/best' if format_choice == "MP3" else 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '192',
+                    }] if format_choice == "MP3" else [],
+                    'outtmpl': 'downloaded_file.%(ext)s',
+                    'cookiefile': 'cookies.txt',
+                    'writethumbnail': True,
+                    'embedmetadata': True,
+                }
+
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    actual_filename = ydl.prepare_filename(info)
+                    
+                    # תיקון סיומת אם בחרנו MP3
+                    if format_choice == "MP3":
+                        actual_filename = actual_filename.rsplit('.', 1)[0] + ".mp3"
+
+                # הצגת כפתור הורדה
+                with open(actual_filename, "rb") as file:
+                    st.success(f"השיר '{info['title']}' מוכן להורדה!")
+                    st.download_button(
+                        label="🎵 לחץ כאן להורדת הקובץ",
+                        data=file,
+                        file_name=f"{info['title']}.{'mp3' if format_choice == 'MP3' else 'mp4'}",
+                        mime="audio/mpeg" if format_choice == "MP3" else "video/mp4"
+                    )
+                
+                # ניקוי קבצים זמניים
+                os.remove(actual_filename)
+                if os.path.exists("cookies.txt"):
+                    os.remove("cookies.txt")
+
+            except Exception as e:
+                st.error(f"שגיאה: {e}")
